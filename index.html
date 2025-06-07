@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Hub Pro</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <!-- Favicon -->
+  <link rel="icon" href="https://via.placeholder.com/32" type="image/png">
+</head>
+<body>
+  <header>
+    <h1>📚 PDF Hub Pro</h1>
+    <div class="header-controls">
+      <button id="darkModeToggle">🌓 Dark Mode</button>
+      <button id="adminToggle">🔒 Admin Mode</button>
+    </div>
+  </header>
+
+  <div class="admin-panel" id="adminPanel">
+    <h3>🔧 Admin Panel</h3>
+    <div id="dropZone">
+      <p>Drop PDFs here or click to upload</p>
+      <input type="file" id="fileInput" accept=".pdf" multiple>
+      <progress id="uploadProgress" value="0" max="100"></progress>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Tab System -->
+    <div class="tabs">
+      <button class="tab active" data-category="all">All</button>
+      <button class="tab" data-category="tutorial">Tutorials</button>
+      <button class="tab" data-category="cheatsheet">Cheatsheets</button>
+    </div>
+
+    <!-- Search -->
+    <input type="text" id="search" placeholder="🔍 Search PDFs..." class="search-bar">
+
+    <!-- PDF List -->
+    <ul id="pdf-list" class="pdf-grid"></ul>
+
+    <!-- PDF Preview -->
+    <div id="pdf-preview-container">
+      <h3>🖥 Preview</h3>
+      <div id="pdf-preview"></div>
+      <button id="downloadBtn" class="download-btn">⬇️ Download</button>
+      <button id="shareBtn" class="share-btn">🔗 Share</button>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-analytics-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
