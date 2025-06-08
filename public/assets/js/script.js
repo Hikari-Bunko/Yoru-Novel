@@ -1,39 +1,29 @@
-// ===== Firebase Initialization =====
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore.js";
+// Import Firebase modules
+import { auth, db, signInAnonymously, addDoc, query, where, getDocs, logEvent } from './firebase-config.js';
 
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef123456",
-  measurementId: "G-ABCDEF123"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Import translation system
+import { translations, currentLang, setLanguage } from './translations.js';
 
 // ===== DOM Elements =====
-const pdfList = document.getElementById('pdf-list');
-const searchInput = document.getElementById('search');
-const pdfPreview = document.getElementById('pdf-preview');
-const darkModeToggle = document.getElementById('darkModeToggle');
-const adminToggle = document.getElementById('adminToggle');
-const adminPanel = document.getElementById('adminPanel');
-const dropZone = document.getElementById('dropZone');
-const fileInput = document.getElementById('fileInput');
-const uploadProgress = document.getElementById('uploadProgress');
-const downloadBtn = document.getElementById('downloadBtn');
-const shareBtn = document.getElementById('shareBtn');
-const tabs = document.querySelectorAll('.tab');
-const commentsList = document.getElementById('commentsList');
-const commentInput = document.getElementById('commentInput');
-const postCommentBtn = document.getElementById('postCommentBtn');
-const stars = document.querySelectorAll('.stars span');
+const elements = {
+  pdfList: document.getElementById('pdf-list'),
+  searchInput: document.getElementById('search'),
+  pdfPreview: document.getElementById('pdf-preview'),
+  darkModeToggle: document.getElementById('darkModeToggle'),
+  adminToggle: document.getElementById('adminToggle'),
+  adminPanel: document.getElementById('adminPanel'),
+  dropZone: document.getElementById('dropZone'),
+  fileInput: document.getElementById('fileInput'),
+  uploadProgress: document.getElementById('uploadProgress'),
+  downloadBtn: document.getElementById('downloadBtn'),
+  shareBtn: document.getElementById('shareBtn'),
+  tabs: document.querySelectorAll('.tab'),
+  commentsList: document.getElementById('commentsList'),
+  commentInput: document.getElementById('commentInput'),
+  postCommentBtn: document.getElementById('postCommentBtn'),
+  stars: document.querySelectorAll('.stars span'),
+  languageSelect: document.getElementById('languageSelect')
+};
 
 // ===== Global Variables =====
 let currentPDF = null;
@@ -45,66 +35,94 @@ const pdfDatabase = [
     name: 'JavaScript Tutorial', 
     file: 'javascript-tutorial.pdf',
     category: 'tutorial',
-    password: null
+    password: null,
+    pages: 42,
+    size: '2.4 MB',
+    uploadedAt: '2023-10-15'
   },
   { 
     name: 'Git Guide', 
     file: 'git-guide.pdf',
     category: 'tutorial',
-    password: null
+    password: null,
+    pages: 28,
+    size: '1.8 MB',
+    uploadedAt: '2023-10-10'
   },
   { 
     name: 'CSS Cheatsheet', 
     file: 'css-cheatsheet.pdf',
     category: 'cheatsheet',
-    password: 'secret123' // Password protected
+    password: 'secret123',
+    pages: 12,
+    size: '0.9 MB',
+    uploadedAt: '2023-10-05'
   }
 ];
 
 // ===== Initialize App =====
-document.addEventListener('DOMContentLoaded', () => {
+function initApp() {
   // Load saved theme
   const savedTheme = localStorage.getItem('theme') || 'light';
   document.body.dataset.theme = savedTheme;
   
+  // Set language
+  setLanguage(currentLang);
+  elements.languageSelect.value = currentLang;
+  
   // Render PDFs
   renderPDFList(pdfDatabase);
   
-  // Initialize Firebase Analytics
-  logEvent('page_view', { page_title: 'Home' });
+  // Initialize event listeners
+  setupEventListeners();
   
   // Register Service Worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/serviceWorker.js')
-      .then(registration => {
-        console.log('ServiceWorker registered');
-      });
-  }
-});
+  registerServiceWorker();
+}
 
-// ===== Dark Mode Toggle =====
-darkModeToggle.addEventListener('click', () => {
-  const newTheme = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
-  document.body.dataset.theme = newTheme;
-  localStorage.setItem('theme', newTheme);
-  logEvent('dark_mode_toggle', { mode: newTheme });
-});
+// ===== Event Listeners Setup =====
+function setupEventListeners() {
+  // Dark Mode Toggle
+  elements.darkModeToggle.addEventListener('click', toggleDarkMode);
+  
+  // Admin Mode Toggle
+  elements.adminToggle.addEventListener('click', toggleAdminPanel);
+  
+  // Search Functionality
+  elements.searchInput.addEventListener('input', handleSearch);
+  
+  // Tab System
+  elements.tabs.forEach(tab => {
+    tab.addEventListener('click', () => handleTabClick(tab));
+  });
+  
+  // Drag & Drop Upload
+  elements.dropZone.addEventListener('dragover', handleDragOver);
+  elements.dropZone.addEventListener('dragleave', handleDragLeave);
+  elements.dropZone.addEventListener('drop', handleDrop);
+  elements.fileInput.addEventListener('change', handleFileInput);
+  
+  // PDF Actions
+  elements.downloadBtn.addEventListener('click', handleDownload);
+  elements.shareBtn.addEventListener('click', handleShare);
+  
+  // Comments System
+  elements.stars.forEach(star => {
+    star.addEventListener('click', () => handleStarClick(star));
+  });
+  elements.postCommentBtn.addEventListener('click', postComment);
+  
+  // Language Selector
+  elements.languageSelect.addEventListener('change', (e) => {
+    setLanguage(e.target.value);
+  });
+}
 
-// ===== Admin Mode Toggle =====
-adminToggle.addEventListener('click', () => {
-  auth.signInAnonymously()
-    .then(() => {
-      adminPanel.style.display = adminPanel.style.display === 'block' ? 'none' : 'block';
-      logEvent('admin_toggle', { state: adminPanel.style.display });
-    })
-    .catch(error => {
-      console.error('Authentication error:', error);
-    });
-});
+// ===== Core Functions =====
 
-// ===== PDF List Rendering =====
+// PDF List Rendering
 function renderPDFList(pdfs) {
-  pdfList.innerHTML = '';
+  elements.pdfList.innerHTML = '';
   
   pdfs.forEach(pdf => {
     const listItem = document.createElement('li');
@@ -121,7 +139,7 @@ function renderPDFList(pdfs) {
     });
     
     listItem.appendChild(link);
-    pdfList.appendChild(listItem);
+    elements.pdfList.appendChild(listItem);
   });
 }
 
@@ -138,77 +156,49 @@ function handlePDFClick(pdf) {
   logEvent('preview_pdf', { pdf_name: pdf.name });
 }
 
-// ===== PDF Preview =====
+// PDF Preview
 function showPDFPreview(pdf) {
   const pdfPath = `pdfs/${pdf.file}`;
   
-  pdfPreview.innerHTML = `
+  elements.pdfPreview.innerHTML = `
     <div class="pdf-container">
       <embed src="${pdfPath}" type="application/pdf" width="100%" height="500px">
       <div class="metadata">
-        <p><strong>📄 ${translations[currentLang].pages || 'Pages'}:</strong> ${pdf.pages || 'N/A'}</p>
-        <p><strong>📦 ${translations[currentLang].size || 'Size'}:</strong> ${pdf.size || 'N/A'}</p>
-        <p><strong>📅 ${translations[currentLang].uploaded || 'Uploaded'}:</strong> ${pdf.uploadedAt || 'N/A'}</p>
+        <p><strong>📄 ${translations[currentLang].pages}:</strong> ${pdf.pages || 'N/A'}</p>
+        <p><strong>📦 ${translations[currentLang].size}:</strong> ${pdf.size || 'N/A'}</p>
+        <p><strong>📅 ${translations[currentLang].uploaded}:</strong> ${pdf.uploadedAt || 'N/A'}</p>
       </div>
     </div>
   `;
-  
-  downloadBtn.onclick = () => {
-    logDownload(pdf.name);
-    window.open(pdfPath, '_blank');
-  };
-  
-  shareBtn.onclick = () => sharePDF(pdf.name, pdfPath);
   
   // Load comments for this PDF
   loadComments();
 }
 
-// ===== Search Functionality =====
-searchInput.addEventListener('input', () => {
-  const searchTerm = searchInput.value.toLowerCase();
+// Search Functionality
+function handleSearch() {
+  const searchTerm = elements.searchInput.value.toLowerCase();
   const filtered = pdfDatabase.filter(pdf => 
     pdf.name.toLowerCase().includes(searchTerm)
   );
   renderPDFList(filtered);
-});
+}
 
-// ===== Tab System =====
-tabs.forEach(tab => {
-  tab.addEventListener('click', () => {
-    tabs.forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    
-    const category = tab.dataset.category;
-    const filtered = category === 'all' 
-      ? pdfDatabase 
-      : pdfDatabase.filter(pdf => pdf.category === category);
-    
-    renderPDFList(filtered);
-    logEvent('filter_pdfs', { category });
-  });
-});
+// Tab System
+function handleTabClick(tab) {
+  elements.tabs.forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  
+  const category = tab.dataset.category;
+  const filtered = category === 'all' 
+    ? pdfDatabase 
+    : pdfDatabase.filter(pdf => pdf.category === category);
+  
+  renderPDFList(filtered);
+  logEvent('filter_pdfs', { category });
+}
 
-// ===== Drag & Drop Upload =====
-dropZone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  dropZone.style.backgroundColor = 'rgba(52, 152, 219, 0.2)';
-});
-
-dropZone.addEventListener('dragleave', () => {
-  dropZone.style.backgroundColor = '';
-});
-
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropZone.style.backgroundColor = '';
-  handleFiles(e.dataTransfer.files);
-});
-
-fileInput.addEventListener('change', () => {
-  handleFiles(fileInput.files);
-});
-
+// File Upload Handling
 function handleFiles(files) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -218,7 +208,7 @@ function handleFiles(files) {
     
     reader.onprogress = (e) => {
       const percent = Math.round((e.loaded / e.total) * 100);
-      uploadProgress.value = percent;
+      elements.uploadProgress.value = percent;
     };
     
     reader.onload = (e) => {
@@ -228,11 +218,14 @@ function handleFiles(files) {
           name: file.name.replace('.pdf', ''),
           file: file.name,
           category: 'tutorial',
-          password: null
+          password: null,
+          pages: 0,
+          size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
+          uploadedAt: new Date().toISOString().split('T')[0]
         });
         
         renderPDFList(pdfDatabase);
-        uploadProgress.value = 0;
+        elements.uploadProgress.value = 0;
         logEvent('upload_pdf', { file_name: file.name });
       }, 1000);
     };
@@ -241,39 +234,74 @@ function handleFiles(files) {
   }
 }
 
-// ===== Share Functionality =====
-function sharePDF(name, url) {
-  if (navigator.share) {
-    navigator.share({
-      title: `Download ${name}`,
-      text: 'Check out this PDF!',
-      url: window.location.href + url,
-    }).then(() => {
-      logEvent('share_pdf', { pdf_name: name });
-    });
-  } else {
-    // Fallback for browsers without Web Share API
-    prompt('Copy this link to share:', url);
-  }
+// Dark Mode Toggle
+function toggleDarkMode() {
+  const newTheme = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.body.dataset.theme = newTheme;
+  localStorage.setItem('theme', newTheme);
+  logEvent('dark_mode_toggle', { mode: newTheme });
 }
 
-// ===== Star Rating Interaction =====
-stars.forEach(star => {
-  star.addEventListener('click', () => {
-    currentRating = parseInt(star.dataset.rating);
-    updateStarDisplay();
-  });
-});
+// Admin Panel Toggle
+function toggleAdminPanel() {
+  signInAnonymously(auth)
+    .then(() => {
+      elements.adminPanel.style.display = elements.adminPanel.style.display === 'block' ? 'none' : 'block';
+      logEvent('admin_toggle', { state: elements.adminPanel.style.display });
+    })
+    .catch(error => {
+      console.error('Authentication error:', error);
+    });
+}
+
+// Drag and Drop Handlers
+function handleDragOver(e) {
+  e.preventDefault();
+  elements.dropZone.style.backgroundColor = 'rgba(52, 152, 219, 0.2)';
+}
+
+function handleDragLeave() {
+  elements.dropZone.style.backgroundColor = '';
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  elements.dropZone.style.backgroundColor = '';
+  handleFiles(e.dataTransfer.files);
+}
+
+function handleFileInput() {
+  handleFiles(elements.fileInput.files);
+}
+
+// PDF Actions
+function handleDownload() {
+  if (!currentPDF) return;
+  const pdfPath = `pdfs/${currentPDF.file}`;
+  logDownload(currentPDF.name);
+  window.open(pdfPath, '_blank');
+}
+
+function handleShare() {
+  if (!currentPDF) return;
+  const pdfPath = `pdfs/${currentPDF.file}`;
+  sharePDF(currentPDF.name, pdfPath);
+}
+
+// Comments System
+function handleStarClick(star) {
+  currentRating = parseInt(star.dataset.rating);
+  updateStarDisplay();
+}
 
 function updateStarDisplay() {
-  stars.forEach((star, index) => {
+  elements.stars.forEach((star, index) => {
     star.style.color = index < currentRating ? '#ffc107' : '#ccc';
   });
 }
 
-// ===== Post Comment =====
-postCommentBtn.addEventListener('click', async () => {
-  const commentText = commentInput.value.trim();
+async function postComment() {
+  const commentText = elements.commentInput.value.trim();
   
   if (!commentText) {
     alert('Please enter a comment!');
@@ -294,7 +322,7 @@ postCommentBtn.addEventListener('click', async () => {
       timestamp: new Date()
     });
     
-    commentInput.value = "";
+    elements.commentInput.value = "";
     currentRating = 0;
     updateStarDisplay();
     loadComments();
@@ -302,17 +330,16 @@ postCommentBtn.addEventListener('click', async () => {
     console.error("Error posting comment:", error);
     alert("Failed to post comment. Please try again.");
   }
-});
+}
 
-// ===== Load Comments =====
 async function loadComments() {
-  commentsList.innerHTML = '<div class="loading">Loading comments...</div>';
+  elements.commentsList.innerHTML = '<div class="loading">Loading comments...</div>';
   
   try {
     const q = query(collection(db, "comments"), where("pdf", "==", currentPDF.name));
     const querySnapshot = await getDocs(q);
     
-    commentsList.innerHTML = '';
+    elements.commentsList.innerHTML = '';
     
     querySnapshot.forEach((doc) => {
       const comment = doc.data();
@@ -326,21 +353,23 @@ async function loadComments() {
         <p>${comment.text}</p>
         <small>${new Date(comment.timestamp?.toDate()).toLocaleString()}</small>
       `;
-      commentsList.appendChild(commentEl);
+      elements.commentsList.appendChild(commentEl);
     });
   } catch (error) {
     console.error("Error loading comments:", error);
-    commentsList.innerHTML = '<div class="error">Failed to load comments.</div>';
+    elements.commentsList.innerHTML = '<div class="error">Failed to load comments.</div>';
   }
 }
 
-// ===== Firebase Analytics =====
-function logEvent(eventName, params) {
-  if (typeof firebase !== 'undefined') {
-    analytics.logEvent(eventName, params);
+// Service Worker Registration
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/serviceWorker.js')
+      .then(registration => {
+        console.log('ServiceWorker registered');
+      });
   }
 }
 
-function logDownload(pdfName) {
-  logEvent('download_pdf', { pdf_name: pdfName });
-}
+// Initialize the app
+document.addEventListener('DOMContentLoaded', initApp);
